@@ -1,11 +1,7 @@
-# Script for populating the database. You can run it as:
+# Run with: mix run priv/repo/seeds.exs (or `mix ecto.setup`)
 #
-#     mix run priv/repo/seeds.exs
-#
-# Inside the script, you can read and write to any of your
-# repositories directly:
-#
-#     Nicechat.Repo.insert!(%Nicechat.SomeSchema{})
-#
-# We recommend using the bang functions (`insert!`, `update!`
-# and so on) as they will fail if something goes wrong.
+# Seeds the default channels every nicechat address starts with.
+
+for name <- ~w(general random dev) do
+  Nicechat.Chat.get_or_create_channel(name)
+end
