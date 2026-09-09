@@ -1,4 +1,4 @@
-# Nicechat
+# Atrium
 
 To start your Phoenix server:
 

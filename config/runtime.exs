@@ -12,20 +12,20 @@ import Config
 # If you use `mix release`, you need to explicitly enable the server
 # by passing the PHX_SERVER=true when you start it:
 #
-#     PHX_SERVER=true bin/nicechat start
+#     PHX_SERVER=true bin/atrium start
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 if System.get_env("PHX_SERVER") do
-  config :nicechat, NicechatWeb.Endpoint, server: true
+  config :atrium, AtriumWeb.Endpoint, server: true
 end
 
-config :nicechat, NicechatWeb.Endpoint,
+config :atrium, AtriumWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
-  config :nicechat, NicechatWeb.Endpoint,
+  config :atrium, AtriumWeb.Endpoint,
     live_reload: [
       web_console_logger: true,
       patterns: [
@@ -34,8 +34,8 @@ if config_env() == :dev do
         # Gettext translations
         ~r"priv/gettext/.*\.po$"E,
         # Router, Controllers, LiveViews and LiveComponents
-        ~r"lib/nicechat_web/router\.ex$"E,
-        ~r"lib/nicechat_web/(controllers|live|components)/.*\.(ex|heex)$"E
+        ~r"lib/atrium_web/router\.ex$"E,
+        ~r"lib/atrium_web/(controllers|live|components)/.*\.(ex|heex)$"E
       ]
     ]
 end
@@ -45,10 +45,10 @@ if config_env() == :prod do
     System.get_env("DATABASE_PATH") ||
       raise """
       environment variable DATABASE_PATH is missing.
-      For example: /data/nicechat.db
+      For example: /data/atrium.db
       """
 
-  config :nicechat, Nicechat.Repo,
+  config :atrium, Atrium.Repo,
     database: database_path,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
     journal_mode: :wal,
@@ -68,9 +68,9 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
-  config :nicechat, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :atrium, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  config :nicechat, NicechatWeb.Endpoint,
+  config :atrium, AtriumWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
       # Enable IPv6 and bind on all interfaces.
@@ -86,7 +86,7 @@ if config_env() == :prod do
   # To get SSL working, you will need to add the `https` key
   # to your endpoint configuration:
   #
-  #     config :nicechat, NicechatWeb.Endpoint,
+  #     config :atrium, AtriumWeb.Endpoint,
   #       https: [
   #         ...,
   #         port: 443,
@@ -108,7 +108,7 @@ if config_env() == :prod do
   # We also recommend setting `force_ssl` in your config/prod.exs,
   # ensuring no data is ever sent via http, always redirecting to https:
   #
-  #     config :nicechat, NicechatWeb.Endpoint,
+  #     config :atrium, AtriumWeb.Endpoint,
   #       force_ssl: [hsts: true]
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
@@ -118,7 +118,7 @@ if config_env() == :prod do
   # In production you need to configure the mailer to use a different adapter.
   # Here is an example configuration for Mailgun:
   #
-  #     config :nicechat, Nicechat.Mailer,
+  #     config :atrium, Atrium.Mailer,
   #       adapter: Swoosh.Adapters.Mailgun,
   #       api_key: System.get_env("MAILGUN_API_KEY"),
   #       domain: System.get_env("MAILGUN_DOMAIN")

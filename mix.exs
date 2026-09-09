@@ -1,9 +1,9 @@
-defmodule Nicechat.MixProject do
+defmodule Atrium.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :nicechat,
+      app: :atrium,
       version: "0.1.0",
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -20,7 +20,7 @@ defmodule Nicechat.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {Nicechat.Application, []},
+      mod: {Atrium.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -89,10 +89,10 @@ defmodule Nicechat.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind nicechat", "esbuild nicechat"],
+      "assets.build": ["compile", "tailwind atrium", "esbuild atrium"],
       "assets.deploy": [
-        "tailwind nicechat --minify",
-        "esbuild nicechat --minify",
+        "tailwind atrium --minify",
+        "esbuild atrium --minify",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]

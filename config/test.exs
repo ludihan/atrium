@@ -5,8 +5,8 @@ import Config
 # The MIX_TEST_PARTITION environment variable can be used
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
-config :nicechat, Nicechat.Repo,
-  database: Path.expand("../nicechat_test#{System.get_env("MIX_TEST_PARTITION")}.db", __DIR__),
+config :atrium, Atrium.Repo,
+  database: Path.expand("../atrium_test#{System.get_env("MIX_TEST_PARTITION")}.db", __DIR__),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 5,
   journal_mode: :wal,
@@ -14,13 +14,13 @@ config :nicechat, Nicechat.Repo,
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :nicechat, NicechatWeb.Endpoint,
+config :atrium, AtriumWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "i37StlB7GUeaCz4GUOSvW+ZCJKhEdIo47CacjTdpvg8Z3y+3347xipBAy4targ1N",
   server: false
 
 # In test we don't send emails
-config :nicechat, Nicechat.Mailer, adapter: Swoosh.Adapters.Test
+config :atrium, Atrium.Mailer, adapter: Swoosh.Adapters.Test
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

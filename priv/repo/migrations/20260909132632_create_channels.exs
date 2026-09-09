@@ -1,4 +1,4 @@
-defmodule Nicechat.Repo.Migrations.CreateChannels do
+defmodule Atrium.Repo.Migrations.CreateChannels do
   use Ecto.Migration
 
   def change do
