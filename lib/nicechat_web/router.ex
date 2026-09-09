@@ -17,7 +17,7 @@ defmodule NicechatWeb.Router do
   scope "/", NicechatWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", ChatLive
   end
 
   # Other scopes may use custom stacks.

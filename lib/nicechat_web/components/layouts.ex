@@ -33,40 +33,24 @@ defmodule NicechatWeb.Layouts do
 
   slot :inner_block, required: true
 
+  slot :header, doc: "optional content rendered on the right of the title bar"
+
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://phoenix.hexdocs.pm/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-    </header>
+    <div class="flex h-dvh flex-col bg-base-100 text-base-content">
+      <header class="flex items-center gap-3 border-b border-base-300 px-4 py-2">
+        <a href="/" class="font-mono text-sm font-semibold tracking-tight">relay</a>
+        <span class="text-xs text-base-content/50">many rooms, one address</span>
+        <div class="ml-auto flex items-center gap-2">
+          {render_slot(@header)}
+          <.theme_toggle />
+        </div>
+      </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+      <main class="min-h-0 flex-1">
         {render_slot(@inner_block)}
-      </div>
-    </main>
+      </main>
+    </div>
 
     <.flash_group flash={@flash} />
     """
