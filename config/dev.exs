@@ -1,14 +1,17 @@
 import Config
 
 # Configure your database
+#
+# WAL mode lets readers run concurrently with a writer, and busy_timeout makes
+# competing writers wait for the lock instead of failing immediately, so many
+# people chatting at once still get their messages through.
 config :nicechat, Nicechat.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "nicechat_dev",
+  database: Path.expand("../nicechat_dev.db", __DIR__),
+  pool_size: 5,
+  journal_mode: :wal,
+  busy_timeout: 5_000,
   stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  show_sensitive_data_on_connection_error: true
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
