@@ -4,6 +4,8 @@ A small chat server in the spirit of IRC: pick a nick, hop between channels in
 the sidebar, talk. Built with Phoenix LiveView and backed by SQLite, so there is
 no database server to run.
 
+![atrium chat](docs/chat.png)
+
 ## Requirements
 
 - Elixir 1.17+ and Erlang/OTP 26+
@@ -22,17 +24,23 @@ run `mix ecto.reset`.
 ## Using it
 
 Pick a nick on the splash prompt, then type in the composer at the bottom.
+
+![Nick prompt](docs/nick-prompt.png)
+
 Anything starting with `/` is a command:
 
 | Command | Effect |
 | --- | --- |
-| `/join #room` | Switch to `#room`, creating it if it does not exist |
-| `/nick name` | Change your nick |
+| `/join #room` (or `/j`) | Switch to `#room`, creating it if it does not exist |
+| `/nick name` (or `/n`) | Change your nick |
 | `/me action` | Send an emote (`* name action`) |
 | `/help` | List the commands |
 
-New lines appear live for everyone in the channel. Each channel keeps its last
-100 messages; open it and you see the recent backlog.
+New lines appear live for everyone in the channel. Opening a channel loads its
+last 100 messages, and the on-screen log is capped at 100 lines as you chat.
+Messages are limited to 2000 characters, nicks to 24 characters (letters,
+numbers and a few IRC-safe symbols); channel names are lowercase, up to 32
+characters.
 
 ## How it works
 
