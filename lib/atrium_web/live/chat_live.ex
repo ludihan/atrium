@@ -111,7 +111,9 @@ defmodule AtriumWeb.ChatLive do
   end
 
   defp run_command(socket, "help", _arg) do
-    put_flash(socket, :info, "Commands: /join #channel · /nick name · /me action")
+    socket
+    |> clear_input()
+    |> put_flash(:info, "Commands: /join #channel · /nick name · /me action")
   end
 
   defp run_command(socket, cmd, _arg) do
