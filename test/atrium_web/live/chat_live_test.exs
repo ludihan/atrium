@@ -74,4 +74,18 @@ defmodule AtriumWeb.ChatLiveTest do
 
     assert render(view) =~ "* tank reloads"
   end
+
+  test "sending a message tells the browser to clear the composer", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/")
+
+    view
+    |> form("form[phx-submit=set_nick]", join: %{nick: "neo"})
+    |> render_submit()
+
+    view
+    |> form("form[phx-submit=send]", chat: %{body: "hello"})
+    |> render_submit()
+
+    assert_push_event(view, "clear-input", %{id: "chat-body"})
+  end
 end

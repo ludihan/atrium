@@ -151,7 +151,11 @@ defmodule AtriumWeb.ChatLive do
     end
   end
 
-  defp clear_input(socket), do: assign(socket, :msg_form, to_form(%{"body" => ""}, as: :chat))
+  defp clear_input(socket) do
+    socket
+    |> assign(:msg_form, to_form(%{"body" => ""}, as: :chat))
+    |> push_event("clear-input", %{id: "chat-body"})
+  end
 
   defp insert_channel(channels, channel) do
     channels
