@@ -25,7 +25,7 @@ defmodule AtriumWeb.ChatLive do
       |> assign(:current, current)
       |> assign(:nick_form, to_form(%{"nick" => ""}, as: :join))
       |> assign(:msg_form, to_form(%{"body" => ""}, as: :chat))
-      |> stream(:messages, (current && Chat.list_recent_messages(current)) || [])
+      |> stream(:messages, (current && Chat.list_recent_messages(current)) || [], limit: -100)
 
     {:ok, socket}
   end
@@ -55,7 +55,7 @@ defmodule AtriumWeb.ChatLive do
   @impl true
   def handle_info({:new_message, message}, socket) do
     if socket.assigns.current && message.channel_id == socket.assigns.current.id do
-      {:noreply, stream_insert(socket, :messages, message)}
+      {:noreply, stream_insert(socket, :messages, message, limit: -100)}
     else
       {:noreply, socket}
     end
@@ -248,6 +248,7 @@ defmodule AtriumWeb.ChatLive do
                 name="chat[body]"
                 value={@msg_form[:body].value}
                 autocomplete="off"
+                maxlength="2000"
                 phx-mounted={JS.focus()}
                 placeholder={
                   if @nick,
