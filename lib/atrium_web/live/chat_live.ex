@@ -130,8 +130,14 @@ defmodule AtriumWeb.ChatLive do
 
   defp post(socket, body, kind) do
     case Chat.post_message(socket.assigns.current, socket.assigns.nick, body, kind) do
-      {:ok, _message} -> clear_input(socket)
-      {:error, _changeset} -> put_flash(socket, :error, "Message was not sent.")
+      {:ok, _message} ->
+        clear_input(socket)
+
+      {:error, :moderated} ->
+        put_flash(socket, :error, "Message blocked: breaks the channel rules.")
+
+      {:error, _changeset} ->
+        put_flash(socket, :error, "Message was not sent.")
     end
   end
 
