@@ -42,7 +42,6 @@ defmodule AtriumWeb.Layouts do
         <a href="/" class="font-mono text-sm font-semibold tracking-tight">atrium</a>
         <div class="ml-auto flex items-center gap-2">
           {render_slot(@header)}
-          <.theme_toggle />
         </div>
       </header>
 
@@ -51,7 +50,44 @@ defmodule AtriumWeb.Layouts do
       </main>
     </div>
 
+    <.settings_menu />
     <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc """
+  A settings button pinned to the bottom-left corner that opens a small popup
+  (currently just the theme switcher). Purely client-side (`Phoenix.LiveView.JS`),
+  so it works the same on every page without any LiveView state.
+  """
+  def settings_menu(assigns) do
+    ~H"""
+    <div class="fixed bottom-3 left-3 z-50">
+      <button
+        type="button"
+        id="settings-toggle"
+        phx-click={JS.toggle(to: "#settings-popup")}
+        phx-click-away={JS.hide(to: "#settings-popup")}
+        class="flex size-10 items-center justify-center rounded-full border border-base-300 bg-base-100 text-base-content/70 shadow-md transition-colors hover:bg-base-200 hover:text-base-content"
+        aria-label="Settings"
+        aria-haspopup="true"
+      >
+        <.icon name="hero-cog-6-tooth" class="size-5" />
+      </button>
+
+      <div
+        id="settings-popup"
+        class="absolute bottom-12 left-0 hidden w-52 rounded-lg border border-base-300 bg-base-100 p-3 shadow-lg"
+      >
+        <p class="mb-2 text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
+          Settings
+        </p>
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-sm">Theme</span>
+          <.theme_toggle />
+        </div>
+      </div>
+    </div>
     """
   end
 
