@@ -350,6 +350,7 @@ defmodule AtriumWeb.ChatLive do
                 value={@msg_form[:body].value}
                 autocomplete="off"
                 maxlength="2000"
+                phx-hook=".AutoFocus"
                 phx-mounted={JS.focus()}
                 placeholder={
                   if @nick,
@@ -367,6 +368,28 @@ defmodule AtriumWeb.ChatLive do
                 Send
               </button>
             </.form>
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".AutoFocus">
+              export default {
+                mounted() {
+                  this.onKeydown = (e) => {
+                    if (this.el.disabled || this.el === document.activeElement) return
+                    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return
+
+                    const active = document.activeElement
+                    const active_is_field =
+                      active &&
+                      (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)
+                    if (active_is_field) return
+
+                    this.el.focus()
+                  }
+                  window.addEventListener("keydown", this.onKeydown)
+                },
+                destroyed() {
+                  window.removeEventListener("keydown", this.onKeydown)
+                }
+              }
+            </script>
           </div>
 
           <div
