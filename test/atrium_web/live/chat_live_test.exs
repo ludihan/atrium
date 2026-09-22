@@ -111,21 +111,34 @@ defmodule AtriumWeb.ChatLiveTest do
            )
   end
 
-  test "shows how many people are online per channel", %{conn: conn, general: general} do
+  test "lists who's online in the channel you're currently viewing", %{conn: conn} do
     {:ok, one, _} = live(conn, ~p"/")
     {:ok, two, _} = live(build_conn(), ~p"/")
 
-    assert element(one, "#online-count-#{general.id}") |> render() =~ "0"
+    assert element(one, "#online-users") |> render() =~ "nobody here yet"
 
     one |> form("form[phx-submit=set_nick]", join: %{nick: "neo"}) |> render_submit()
     _ = :sys.get_state(one.pid)
 
-    assert element(one, "#online-count-#{general.id}") |> render() =~ "1"
+    assert element(one, "#online-users") |> render() =~ "neo"
+    refute element(one, "#online-users") |> render() =~ "trinity"
 
     two |> form("form[phx-submit=set_nick]", join: %{nick: "trinity"}) |> render_submit()
     _ = :sys.get_state(one.pid)
 
-    assert element(one, "#online-count-#{general.id}") |> render() =~ "2"
+    online = element(one, "#online-users") |> render()
+    assert online =~ "neo"
+    assert online =~ "trinity"
+
+    two
+    |> form("form[phx-submit=send]", chat: %{body: "/join #zion"})
+    |> render_submit()
+
+    _ = :sys.get_state(one.pid)
+
+    online = element(one, "#online-users") |> render()
+    assert online =~ "neo"
+    refute online =~ "trinity"
   end
 
   test "blocked-message notices queue newest-first and cap how many render", %{conn: conn} do

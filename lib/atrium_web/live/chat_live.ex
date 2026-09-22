@@ -30,7 +30,7 @@ defmodule AtriumWeb.ChatLive do
       |> assign(:presence_key, nil)
       |> assign(:channels, channels)
       |> assign(:current, current)
-      |> assign(:online_counts, online_counts())
+      |> assign(:online_users, online_users_by_channel())
       |> assign(:replying_to, nil)
       |> assign(:mobile_panel, nil)
       |> assign(:blocked_notices, [])
@@ -103,7 +103,7 @@ defmodule AtriumWeb.ChatLive do
   end
 
   def handle_info(%{event: "presence_diff"}, socket) do
-    {:noreply, assign(socket, :online_counts, online_counts())}
+    {:noreply, assign(socket, :online_users, online_users_by_channel())}
   end
 
   ## Input handling
@@ -238,14 +238,23 @@ defmodule AtriumWeb.ChatLive do
     assign(socket, :presence_key, nick)
   end
 
-  defp online_counts do
+  defp online_users_by_channel do
     @presence_topic
     |> Presence.list()
-    |> Enum.reduce(%{}, fn {_key, %{metas: metas}}, acc ->
-      Enum.reduce(metas, acc, fn %{channel_id: channel_id}, acc2 ->
-        Map.update(acc2, channel_id, 1, &(&1 + 1))
+    |> Enum.reduce(%{}, fn {nick, %{metas: metas}}, acc ->
+      metas
+      |> Enum.map(& &1.channel_id)
+      |> Enum.uniq()
+      |> Enum.reduce(acc, fn channel_id, acc2 ->
+        Map.update(acc2, channel_id, [nick], &[nick | &1])
       end)
     end)
+  end
+
+  defp online_users_for(_online_users, nil), do: []
+
+  defp online_users_for(online_users, channel) do
+    online_users |> Map.get(channel.id, []) |> Enum.sort()
   end
 
   defp clear_input(socket) do
@@ -360,9 +369,9 @@ defmodule AtriumWeb.ChatLive do
               #{channel.name}
             </button>
           </nav>
-          <p class="border-t border-base-300 px-3 py-2 font-mono text-[0.7rem] text-base-content/40">
-            /join #newroom
-          </p>
+          <div class="border-t border-base-300">
+            <Layouts.settings_button />
+          </div>
         </aside>
 
         <section class="relative flex min-w-0 flex-1 flex-col">
@@ -551,8 +560,9 @@ defmodule AtriumWeb.ChatLive do
           if(@mobile_panel == :online, do: "fixed inset-y-0 right-0 z-40 flex", else: "hidden")
         ]}>
           <div class="flex items-center justify-between px-3 py-2">
-            <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
+            <p class="truncate text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
               Online
+              <span :if={@current} class="normal-case text-base-content/30">in #{@current.name}</span>
             </p>
             <button
               type="button"
@@ -563,21 +573,28 @@ defmodule AtriumWeb.ChatLive do
               <.icon name="hero-x-mark" class="size-4" />
             </button>
           </div>
-          <ul class="flex-1 overflow-y-auto px-3 pb-2 font-mono text-sm">
-            <li :for={channel <- @channels} class="flex items-center justify-between gap-2 py-1">
+          <ul id="online-users" class="flex-1 overflow-y-auto px-3 pb-2 font-mono text-sm">
+            <li
+              :for={nick <- online_users_for(@online_users, @current)}
+              class="flex items-center gap-1.5 truncate py-1"
+            >
+              <span class={[
+                "size-1.5 shrink-0 rounded-full",
+                if(nick == @nick, do: "bg-primary", else: "bg-success")
+              ]} />
               <span class={[
                 "truncate",
-                @current && @current.id == channel.id && "font-semibold text-primary",
-                !(@current && @current.id == channel.id) && "text-base-content/70"
+                nick == @nick && "font-semibold text-primary",
+                nick != @nick && "text-base-content/70"
               ]}>
-                #{channel.name}
+                {nick}
               </span>
-              <span
-                id={"online-count-#{channel.id}"}
-                class="shrink-0 rounded-full bg-base-300 px-1.5 py-0.5 text-[0.65rem] tabular-nums text-base-content/60"
-              >
-                {Map.get(@online_counts, channel.id, 0)}
-              </span>
+            </li>
+            <li
+              :if={online_users_for(@online_users, @current) == []}
+              class="py-1 text-base-content/40"
+            >
+              nobody here yet
             </li>
           </ul>
         </aside>

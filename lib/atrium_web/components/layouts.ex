@@ -50,34 +50,35 @@ defmodule AtriumWeb.Layouts do
       </main>
     </div>
 
-    <.settings_menu />
     <.flash_group flash={@flash} />
     """
   end
 
   @doc """
-  A settings button pinned to the bottom-left corner that opens a small popup
-  (currently just the theme switcher). Purely client-side (`Phoenix.LiveView.JS`),
-  so it works the same on every page without any LiveView state.
+  A settings button that opens a small popup above it (currently just the
+  theme switcher). Fills the width of whatever container it's placed in, so
+  the caller controls sizing/positioning (e.g. pinned to the bottom of a
+  sidebar). Purely client-side (`Phoenix.LiveView.JS`), so it needs no
+  LiveView state.
   """
-  def settings_menu(assigns) do
+  def settings_button(assigns) do
     ~H"""
-    <div class="fixed bottom-3 left-3 z-50">
+    <div class="relative">
       <button
         type="button"
         id="settings-toggle"
         phx-click={JS.toggle(to: "#settings-popup")}
         phx-click-away={JS.hide(to: "#settings-popup")}
-        class="flex size-10 items-center justify-center rounded-full border border-base-300 bg-base-100 text-base-content/70 shadow-md transition-colors hover:bg-base-200 hover:text-base-content"
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-base-content/70 transition-colors hover:bg-base-300/60 hover:text-base-content"
         aria-label="Settings"
         aria-haspopup="true"
       >
-        <.icon name="hero-cog-6-tooth" class="size-5" />
+        <.icon name="hero-cog-6-tooth" class="size-4 shrink-0" /> Settings
       </button>
 
       <div
         id="settings-popup"
-        class="absolute bottom-12 left-0 hidden w-52 rounded-lg border border-base-300 bg-base-100 p-3 shadow-lg"
+        class="absolute inset-x-0 bottom-full z-20 mb-1 hidden rounded-lg border border-base-300 bg-base-100 p-3 shadow-lg"
       >
         <p class="mb-2 text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
           Settings
