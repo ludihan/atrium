@@ -48,7 +48,7 @@ defmodule AtriumWeb.ChatLive do
         {:noreply, put_flash(socket, :error, "Pick a nick with letters or numbers.")}
 
       nick ->
-        {:noreply, socket |> assign(:nick, nick) |> track_presence()}
+        {:noreply, socket |> assign(:nick, nick) |> refresh_messages() |> track_presence()}
     end
   end
 
@@ -148,6 +148,7 @@ defmodule AtriumWeb.ChatLive do
       nick ->
         socket
         |> assign(:nick, nick)
+        |> refresh_messages()
         |> track_presence()
         |> clear_input()
     end
@@ -225,6 +226,12 @@ defmodule AtriumWeb.ChatLive do
     end
   end
 
+  defp refresh_messages(%{assigns: %{current: nil}} = socket), do: socket
+
+  defp refresh_messages(socket) do
+    stream(socket, :messages, Chat.list_recent_messages(socket.assigns.current), reset: true)
+  end
+
   defp track_presence(%{assigns: %{current: nil}} = socket), do: socket
 
   defp track_presence(socket) do
@@ -277,6 +284,57 @@ defmodule AtriumWeb.ChatLive do
     |> String.replace(~r/\s+/, "-")
     |> String.replace(~r/[^A-Za-z0-9_\-\[\]\\^`{}|]/, "")
     |> String.slice(0, 24)
+  end
+
+  ## Mentions ("@nick")
+
+  @mention_regex ~r/@[A-Za-z0-9_\-\[\]\\^`{}|]{1,24}/
+
+  defp render_segments(body) do
+    @mention_regex
+    |> Regex.split(body, include_captures: true, trim: true)
+    |> Enum.map(fn
+      "@" <> nick -> {:mention, nick}
+      text -> {:text, text}
+    end)
+  end
+
+  defp mentions?(_body, nil), do: false
+
+  defp mentions?(body, nick) do
+    body
+    |> render_segments()
+    |> Enum.any?(fn
+      {:mention, mentioned} -> String.downcase(mentioned) == String.downcase(nick)
+      _ -> false
+    end)
+  end
+
+  defp mention_html(body, nick) do
+    body
+    |> render_segments()
+    |> Enum.map(fn
+      {:text, text} ->
+        Phoenix.HTML.Engine.encode_to_iodata!(text)
+
+      {:mention, mentioned} ->
+        classes =
+          if nick && String.downcase(mentioned) == String.downcase(nick) do
+            "rounded px-1 bg-primary/25 font-semibold text-primary"
+          else
+            "rounded px-1 bg-primary/10 text-primary"
+          end
+
+        [
+          ~s(<span class="),
+          classes,
+          ~s(">@),
+          Phoenix.HTML.Engine.encode_to_iodata!(mentioned),
+          ~s(</span>)
+        ]
+    end)
+    |> IO.iodata_to_binary()
+    |> Phoenix.HTML.raw()
   end
 
   ## Rendering
@@ -396,7 +454,10 @@ defmodule AtriumWeb.ChatLive do
             <div
               :for={{dom_id, message} <- @streams.messages}
               id={dom_id}
-              class="group/msg leading-relaxed"
+              class={[
+                "group/msg leading-relaxed",
+                mentions?(message.body, @nick) && "-mx-2 rounded bg-primary/10 px-2"
+              ]}
             >
               <button
                 :if={message.reply_to}
@@ -418,12 +479,12 @@ defmodule AtriumWeb.ChatLive do
               </time>
               <%= if message.kind == "emote" do %>
                 <span class={["italic", nick_color(message.nick)]}>
-                  * {message.nick} {message.body}
+                  * {message.nick} {mention_html(message.body, @nick)}
                 </span>
               <% else %>
                 <span class={["font-semibold", nick_color(message.nick)]}>{message.nick}</span>
                 <span class="text-base-content/40">:</span>
-                <span class="whitespace-pre-wrap break-words">{message.body}</span>
+                <span class="whitespace-pre-wrap break-words">{mention_html(message.body, @nick)}</span>
               <% end %>
               <button
                 type="button"
@@ -477,23 +538,31 @@ defmodule AtriumWeb.ChatLive do
               </button>
             </div>
             <.form for={@msg_form} phx-submit="send" class="flex gap-2">
-              <input
-                type="text"
-                id="chat-body"
-                name="chat[body]"
-                value={@msg_form[:body].value}
-                autocomplete="off"
-                maxlength="2000"
-                phx-hook=".AutoFocus"
-                phx-mounted={JS.focus()}
-                placeholder={
-                  if @nick,
-                    do: "message #" <> ((@current && @current.name) || ""),
-                    else: "set a nick to talk"
-                }
-                disabled={is_nil(@nick)}
-                class="flex-1 rounded border border-base-300 bg-base-100 px-3 py-1.5 font-mono text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
+              <div class="relative flex-1">
+                <div
+                  id="command-suggestions"
+                  phx-update="ignore"
+                  class="absolute inset-x-0 bottom-full z-20 mb-1 hidden overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-lg"
+                >
+                </div>
+                <input
+                  type="text"
+                  id="chat-body"
+                  name="chat[body]"
+                  value={@msg_form[:body].value}
+                  autocomplete="off"
+                  maxlength="2000"
+                  phx-hook=".ChatInput"
+                  phx-mounted={JS.focus()}
+                  placeholder={
+                    if @nick,
+                      do: "message #" <> ((@current && @current.name) || ""),
+                      else: "set a nick to talk"
+                  }
+                  disabled={is_nil(@nick)}
+                  class="w-full rounded border border-base-300 bg-base-100 px-3 py-1.5 font-mono text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+                />
+              </div>
               <button
                 type="submit"
                 disabled={is_nil(@nick)}
@@ -502,10 +571,20 @@ defmodule AtriumWeb.ChatLive do
                 Send
               </button>
             </.form>
-            <script :type={Phoenix.LiveView.ColocatedHook} name=".AutoFocus">
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".ChatInput">
               export default {
+                commands: [
+                  {name: "join", alias: "j", hint: "#channel", desc: "switch or create a channel"},
+                  {name: "nick", alias: "n", hint: "name", desc: "change your nick"},
+                  {name: "me", alias: null, hint: "action", desc: "send an action message"},
+                  {name: "help", alias: null, hint: "", desc: "list commands"}
+                ],
                 mounted() {
-                  this.onKeydown = (e) => {
+                  this.menu = document.getElementById("command-suggestions")
+                  this.matches = []
+                  this.active = 0
+
+                  this.onGlobalKeydown = (e) => {
                     if (this.el.disabled || this.el === document.activeElement) return
                     if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return
 
@@ -517,10 +596,128 @@ defmodule AtriumWeb.ChatLive do
 
                     this.el.focus()
                   }
-                  window.addEventListener("keydown", this.onKeydown)
+                  window.addEventListener("keydown", this.onGlobalKeydown)
+
+                  this.onRecompute = () => this.updateMatches()
+                  this.el.addEventListener("input", this.onRecompute)
+                  this.el.addEventListener("keyup", this.onRecompute)
+                  this.el.addEventListener("click", this.onRecompute)
+
+                  this.onKeydown = (e) => {
+                    if (this.matches.length === 0) return
+
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault()
+                      this.active = (this.active + 1) % this.matches.length
+                      this.render()
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault()
+                      this.active = (this.active - 1 + this.matches.length) % this.matches.length
+                      this.render()
+                    } else if (e.key === "Tab" || e.key === "Enter") {
+                      e.preventDefault()
+                      this.apply(this.matches[this.active])
+                    } else if (e.key === "Escape") {
+                      this.hide()
+                    }
+                  }
+                  this.el.addEventListener("keydown", this.onKeydown)
+
+                  this.onBlur = () => setTimeout(() => this.hide(), 150)
+                  this.el.addEventListener("blur", this.onBlur)
+                },
+                updateMatches() {
+                  const commandMatch = this.el.value.match(/^\/([a-zA-Z]*)$/)
+
+                  if (commandMatch) {
+                    const query = commandMatch[1].toLowerCase()
+                    this.range = {start: 0, end: this.el.value.length}
+                    this.matches = this.commands
+                      .filter(c => c.name.startsWith(query) || (c.alias && c.alias.startsWith(query)))
+                      .map(c => ({label: `/${c.name}`, hint: c.hint, desc: c.desc, replacement: `/${c.name} `}))
+                    this.active = 0
+                    this.render()
+                    return
+                  }
+
+                  const mention = this.mentionQuery()
+
+                  if (mention) {
+                    this.range = mention.range
+                    this.matches = this.onlineNicks()
+                      .filter(nick => nick.toLowerCase().startsWith(mention.query.toLowerCase()))
+                      .slice(0, 8)
+                      .map(nick => ({label: `@${nick}`, hint: "", desc: "", replacement: `@${nick} `}))
+                    this.active = 0
+                    this.render()
+                    return
+                  }
+
+                  this.hide()
+                },
+                mentionQuery() {
+                  const pos = this.el.selectionStart
+                  const uptoCaret = this.el.value.slice(0, pos)
+                  const match = uptoCaret.match(/(?:^|\s)@([A-Za-z0-9_\-\[\]\\^`{}|]{0,24})$/)
+                  if (!match) return null
+
+                  return {query: match[1], range: {start: uptoCaret.lastIndexOf("@"), end: pos}}
+                },
+                onlineNicks() {
+                  return Array.from(document.querySelectorAll("#online-users li[data-nick]")).map(
+                    el => el.dataset.nick
+                  )
+                },
+                apply(match) {
+                  const {start, end} = this.range
+                  const value = this.el.value
+                  const newValue = value.slice(0, start) + match.replacement + value.slice(end)
+                  const newPos = start + match.replacement.length
+
+                  this.el.value = newValue
+                  this.hide()
+                  this.el.focus()
+                  this.el.setSelectionRange(newPos, newPos)
+                },
+                render() {
+                  if (this.matches.length === 0) {
+                    this.hide()
+                    return
+                  }
+
+                  this.menu.innerHTML = ""
+                  this.matches.forEach((match, i) => {
+                    const item = document.createElement("button")
+                    item.type = "button"
+                    item.className =
+                      "flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-xs " +
+                      (i === this.active
+                        ? "bg-primary/10 text-primary"
+                        : "text-base-content/70 hover:bg-base-300/60")
+                    item.innerHTML =
+                      `<span class="font-semibold">${match.label}</span>` +
+                      (match.hint ? `<span class="text-base-content/40">${match.hint}</span>` : "") +
+                      (match.desc ? `<span class="ml-auto text-base-content/40">${match.desc}</span>` : "")
+                    item.addEventListener("mousedown", (e) => {
+                      e.preventDefault()
+                      this.apply(match)
+                    })
+                    this.menu.appendChild(item)
+                  })
+                  this.menu.classList.remove("hidden")
+                },
+                hide() {
+                  this.matches = []
+                  this.menu.classList.add("hidden")
+                  this.menu.innerHTML = ""
                 },
                 destroyed() {
-                  window.removeEventListener("keydown", this.onKeydown)
+                  window.removeEventListener("keydown", this.onGlobalKeydown)
+                  this.el.removeEventListener("input", this.onRecompute)
+                  this.el.removeEventListener("keyup", this.onRecompute)
+                  this.el.removeEventListener("click", this.onRecompute)
+                  this.el.removeEventListener("keydown", this.onKeydown)
+                  this.el.removeEventListener("blur", this.onBlur)
                 }
               }
             </script>
@@ -576,6 +773,7 @@ defmodule AtriumWeb.ChatLive do
           <ul id="online-users" class="flex-1 overflow-y-auto px-3 pb-2 font-mono text-sm">
             <li
               :for={nick <- online_users_for(@online_users, @current)}
+              data-nick={nick}
               class="flex items-center gap-1.5 truncate py-1"
             >
               <span class={[

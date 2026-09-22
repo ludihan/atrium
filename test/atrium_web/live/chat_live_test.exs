@@ -75,6 +75,31 @@ defmodule AtriumWeb.ChatLiveTest do
     assert render(view) =~ "* tank reloads"
   end
 
+  test "mentioning a nick renders a styled token and highlights the message for them", %{
+    conn: conn
+  } do
+    {:ok, sender, _} = live(conn, ~p"/")
+
+    sender
+    |> form("form[phx-submit=set_nick]", join: %{nick: "neo"})
+    |> render_submit()
+
+    sender
+    |> form("form[phx-submit=send]", chat: %{body: "hey @trinity, catch"})
+    |> render_submit()
+
+    assert render(sender) =~ "@trinity"
+    refute render(sender) =~ "bg-primary/10 px-2"
+
+    {:ok, viewer, _} = live(conn, ~p"/")
+
+    viewer
+    |> form("form[phx-submit=set_nick]", join: %{nick: "trinity"})
+    |> render_submit()
+
+    assert render(viewer) =~ "bg-primary/10 px-2"
+  end
+
   test "replying to a message quotes it and links the reply", %{conn: conn, general: general} do
     {:ok, view, _} = live(conn, ~p"/")
 
