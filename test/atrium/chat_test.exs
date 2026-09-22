@@ -37,6 +37,22 @@ defmodule Atrium.ChatTest do
       assert bodies == ["m3", "m4", "m5"]
     end
 
+    test "post_message can reply to an earlier message in the same channel", %{channel: channel} do
+      {:ok, original} = Chat.post_message(channel, "neo", "what is the matrix?")
+      {:ok, reply} = Chat.post_message(channel, "morpheus", "let me show you", "said", original)
+
+      assert reply.reply_to_id == original.id
+      assert reply.reply_to.body == "what is the matrix?"
+    end
+
+    test "post_message drops a reply_to from a different channel", %{channel: channel} do
+      {:ok, other} = Chat.get_or_create_channel("other")
+      {:ok, foreign} = Chat.post_message(other, "neo", "wrong room")
+
+      assert {:ok, reply} = Chat.post_message(channel, "morpheus", "huh?", "said", foreign)
+      assert reply.reply_to_id == nil
+    end
+
     test "concurrent writers all get their messages persisted", %{channel: channel} do
       parent = self()
       Ecto.Adapters.SQL.Sandbox.mode(Atrium.Repo, {:shared, parent})

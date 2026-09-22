@@ -65,27 +65,43 @@ defmodule Atrium.Chat do
     )
     |> Repo.all()
     |> Enum.reverse()
+    |> Repo.preload(:reply_to)
   end
+
+  @doc "Fetches a message by id, or `nil` if it does not exist."
+  def get_message(id), do: Repo.get(Message, id)
 
   @doc """
   Records a line in `channel` and broadcasts it to everyone watching that
   channel. `kind` is `"said"` or `"emote"` (`/me`).
 
+  `reply_to` is an optional `%Message{}` this line responds to; it is only
+  attached when it belongs to the same `channel` (silently dropped otherwise).
+
   When moderation is configured (see `Atrium.Chat.Moderation`), the message is
   checked against the configured rules first; a message that breaks them is
   rejected with `{:error, :moderated}` instead of being stored.
   """
-  def post_message(%Channel{} = channel, nick, body, kind \\ "said") do
+  def post_message(%Channel{} = channel, nick, body, kind \\ "said", reply_to \\ nil) do
     case Moderation.check(body) do
       :block ->
         {:error, :moderated}
 
       :allow ->
+        attrs = %{
+          body: body,
+          nick: nick,
+          kind: kind,
+          channel_id: channel.id,
+          reply_to_id: reply_to_id(reply_to, channel)
+        }
+
         %Message{}
-        |> Message.changeset(%{body: body, nick: nick, kind: kind, channel_id: channel.id})
+        |> Message.changeset(attrs)
         |> Repo.insert()
         |> case do
           {:ok, message} ->
+            message = Repo.preload(message, :reply_to)
             Phoenix.PubSub.broadcast(@pubsub, topic(channel), {:new_message, message})
             {:ok, message}
 
@@ -94,6 +110,9 @@ defmodule Atrium.Chat do
         end
     end
   end
+
+  defp reply_to_id(%Message{id: id, channel_id: channel_id}, %Channel{id: channel_id}), do: id
+  defp reply_to_id(_reply_to, _channel), do: nil
 
   ## PubSub
 
