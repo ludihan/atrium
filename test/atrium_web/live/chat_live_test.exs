@@ -75,6 +75,37 @@ defmodule AtriumWeb.ChatLiveTest do
     assert render(view) =~ "* tank reloads"
   end
 
+  test "replying to a message quotes it and links the reply", %{conn: conn, general: general} do
+    {:ok, view, _} = live(conn, ~p"/")
+
+    view
+    |> form("form[phx-submit=set_nick]", join: %{nick: "neo"})
+    |> render_submit()
+
+    view
+    |> form("form[phx-submit=send]", chat: %{body: "what is the matrix?"})
+    |> render_submit()
+
+    [original] = Chat.list_recent_messages(general)
+
+    view
+    |> element("button[phx-click=reply][phx-value-id='#{original.id}']")
+    |> render_click()
+
+    assert has_element?(view, "[phx-click=cancel_reply]")
+    assert render(view) =~ "replying to"
+
+    view
+    |> form("form[phx-submit=send]", chat: %{body: "let me show you"})
+    |> render_submit()
+
+    refute has_element?(view, "[phx-click=cancel_reply]")
+    assert render(view) =~ "what is the matrix?"
+
+    [_original, reply] = Chat.list_recent_messages(general)
+    assert reply.reply_to_id == original.id
+  end
+
   test "sending a message tells the browser to clear the composer", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
 

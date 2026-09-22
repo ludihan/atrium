@@ -25,6 +25,7 @@ defmodule AtriumWeb.ChatLive do
       |> assign(:nick, nil)
       |> assign(:channels, channels)
       |> assign(:current, current)
+      |> assign(:replying_to, nil)
       |> assign(:nick_form, to_form(%{"nick" => ""}, as: :join))
       |> assign(:msg_form, to_form(%{"body" => ""}, as: :chat))
       |> stream(:messages, (current && Chat.list_recent_messages(current)) || [], limit: -100)
@@ -53,6 +54,17 @@ defmodule AtriumWeb.ChatLive do
 
   def handle_event("send", %{"chat" => %{"body" => body}}, socket) do
     {:noreply, handle_input(socket, String.trim(body))}
+  end
+
+  def handle_event("reply", %{"id" => id}, socket) do
+    case Chat.get_message(id) do
+      %Chat.Message{} = message -> {:noreply, assign(socket, :replying_to, message)}
+      nil -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_reply", _params, socket) do
+    {:noreply, assign(socket, :replying_to, nil)}
   end
 
   @impl true
@@ -136,9 +148,13 @@ defmodule AtriumWeb.ChatLive do
   end
 
   defp post(socket, body, kind) do
-    case Chat.post_message(socket.assigns.current, socket.assigns.nick, body, kind) do
+    reply_to = socket.assigns.replying_to
+
+    case Chat.post_message(socket.assigns.current, socket.assigns.nick, body, kind, reply_to) do
       {:ok, _message} ->
-        clear_input(socket)
+        socket
+        |> assign(:replying_to, nil)
+        |> clear_input()
 
       {:error, :moderated} ->
         show_blocked_notice(socket, "Message blocked: breaks the channel rules.")
@@ -165,6 +181,7 @@ defmodule AtriumWeb.ChatLive do
 
       socket
       |> assign(:current, channel)
+      |> assign(:replying_to, nil)
       |> clear_input()
       |> stream(:messages, Chat.list_recent_messages(channel), reset: true)
     end
@@ -264,7 +281,22 @@ defmodule AtriumWeb.ChatLive do
             <p id="messages-empty" class="hidden py-8 text-center text-base-content/40 only:block">
               No messages yet. Say hello.
             </p>
-            <div :for={{dom_id, message} <- @streams.messages} id={dom_id} class="leading-relaxed">
+            <div
+              :for={{dom_id, message} <- @streams.messages}
+              id={dom_id}
+              class="group/msg leading-relaxed"
+            >
+              <div
+                :if={message.reply_to}
+                class="ml-14 flex items-center gap-1 text-[0.7rem] text-base-content/40"
+              >
+                <.icon name="hero-arrow-uturn-left" class="size-3 shrink-0" />
+                <span class={["font-semibold", nick_color(message.reply_to.nick)]}>
+                  {message.reply_to.nick}
+                </span>
+                <span class="truncate">{reply_preview(message.reply_to.body)}</span>
+              </div>
+
               <time class="mr-2 text-[0.7rem] text-base-content/30">
                 {Calendar.strftime(message.inserted_at, "%H:%M")}
               </time>
@@ -277,10 +309,39 @@ defmodule AtriumWeb.ChatLive do
                 <span class="text-base-content/40">:</span>
                 <span class="whitespace-pre-wrap break-words">{message.body}</span>
               <% end %>
+              <button
+                type="button"
+                phx-click="reply"
+                phx-value-id={message.id}
+                class="ml-1 rounded px-1 align-middle text-[0.7rem] text-base-content/30 opacity-0 transition-opacity hover:text-primary group-hover/msg:opacity-100"
+              >
+                reply
+              </button>
             </div>
           </div>
 
           <div class="border-t border-base-300 p-3">
+            <div
+              :if={@replying_to}
+              class="mb-2 flex items-center gap-2 rounded border border-base-300 bg-base-200/60 px-3 py-1.5 font-mono text-xs"
+            >
+              <.icon name="hero-arrow-uturn-left" class="size-3 shrink-0 text-base-content/40" />
+              <span class="text-base-content/50">replying to</span>
+              <span class={["font-semibold", nick_color(@replying_to.nick)]}>
+                {@replying_to.nick}
+              </span>
+              <span class="flex-1 truncate text-base-content/50">
+                {reply_preview(@replying_to.body)}
+              </span>
+              <button
+                type="button"
+                phx-click="cancel_reply"
+                class="text-base-content/40 hover:text-base-content"
+                aria-label="Cancel reply"
+              >
+                <.icon name="hero-x-mark" class="size-3.5" />
+              </button>
+            </div>
             <.form for={@msg_form} phx-submit="send" class="flex gap-2">
               <input
                 type="text"
@@ -348,5 +409,9 @@ defmodule AtriumWeb.ChatLive do
 
   defp nick_color(nick) do
     Enum.at(@colors, :erlang.phash2(nick, length(@colors)))
+  end
+
+  defp reply_preview(body) do
+    if String.length(body) > 80, do: String.slice(body, 0, 80) <> "…", else: body
   end
 end
