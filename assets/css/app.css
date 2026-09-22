@@ -103,3 +103,18 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* Briefly flashes a message after jumping to it via a reply quote */
+.message-highlight {
+  animation: message-highlight 1.2s ease-out;
+}
+
+@keyframes message-highlight {
+  from {
+    background-color: oklch(70% 0.213 47.604 / 25%);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}

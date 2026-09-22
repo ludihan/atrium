@@ -104,6 +104,11 @@ defmodule AtriumWeb.ChatLiveTest do
 
     [_original, reply] = Chat.list_recent_messages(general)
     assert reply.reply_to_id == original.id
+
+    assert has_element?(
+             view,
+             "button[phx-hook='AtriumWeb.ChatLive.JumpToReply'][data-target-id='messages-#{original.id}']"
+           )
   end
 
   test "sending a message tells the browser to clear the composer", %{conn: conn} do

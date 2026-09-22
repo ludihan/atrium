@@ -286,16 +286,20 @@ defmodule AtriumWeb.ChatLive do
               id={dom_id}
               class="group/msg leading-relaxed"
             >
-              <div
+              <button
                 :if={message.reply_to}
-                class="ml-14 flex items-center gap-1 text-[0.7rem] text-base-content/40"
+                type="button"
+                id={"#{dom_id}-jump"}
+                phx-hook=".JumpToReply"
+                data-target-id={"messages-#{message.reply_to.id}"}
+                class="ml-14 flex items-center gap-1 text-[0.7rem] text-base-content/40 hover:text-base-content/70 hover:underline"
               >
                 <.icon name="hero-arrow-uturn-left" class="size-3 shrink-0" />
                 <span class={["font-semibold", nick_color(message.reply_to.nick)]}>
                   {message.reply_to.nick}
                 </span>
                 <span class="truncate">{reply_preview(message.reply_to.body)}</span>
-              </div>
+              </button>
 
               <time class="mr-2 text-[0.7rem] text-base-content/30">
                 {Calendar.strftime(message.inserted_at, "%H:%M")}
@@ -319,6 +323,24 @@ defmodule AtriumWeb.ChatLive do
               </button>
             </div>
           </div>
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".JumpToReply">
+            export default {
+              mounted() {
+                this.el.addEventListener("click", () => {
+                  const target = document.getElementById(this.el.dataset.targetId)
+                  if (!target) return
+
+                  target.scrollIntoView({behavior: "smooth", block: "center"})
+                  target.classList.add("message-highlight")
+                  target.addEventListener(
+                    "animationend",
+                    () => target.classList.remove("message-highlight"),
+                    {once: true}
+                  )
+                })
+              }
+            }
+          </script>
 
           <div class="border-t border-base-300 p-3">
             <div
