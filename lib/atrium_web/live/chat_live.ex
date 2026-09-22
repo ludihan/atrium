@@ -7,6 +7,8 @@ defmodule AtriumWeb.ChatLive do
 
   alias Atrium.Chat
 
+  @blocked_notice_ttl :timer.seconds(4)
+
   @impl true
   def mount(_params, _session, socket) do
     channels = Chat.list_channels()
@@ -26,6 +28,7 @@ defmodule AtriumWeb.ChatLive do
       |> assign(:nick_form, to_form(%{"nick" => ""}, as: :join))
       |> assign(:msg_form, to_form(%{"body" => ""}, as: :chat))
       |> stream(:messages, (current && Chat.list_recent_messages(current)) || [], limit: -100)
+      |> stream(:blocked_notices, [])
 
     {:ok, socket}
   end
@@ -63,6 +66,10 @@ defmodule AtriumWeb.ChatLive do
 
   def handle_info({:channels, channels}, socket) do
     {:noreply, assign(socket, :channels, channels)}
+  end
+
+  def handle_info({:dismiss_blocked_notice, id}, socket) do
+    {:noreply, stream_delete(socket, :blocked_notices, %{id: id})}
   end
 
   ## Input handling
@@ -134,11 +141,17 @@ defmodule AtriumWeb.ChatLive do
         clear_input(socket)
 
       {:error, :moderated} ->
-        put_flash(socket, :error, "Message blocked: breaks the channel rules.")
+        show_blocked_notice(socket, "Message blocked: breaks the channel rules.")
 
       {:error, _changeset} ->
         put_flash(socket, :error, "Message was not sent.")
     end
+  end
+
+  defp show_blocked_notice(socket, text) do
+    id = "blocked-#{System.unique_integer([:positive, :monotonic])}"
+    Process.send_after(self(), {:dismiss_blocked_notice, id}, @blocked_notice_ttl)
+    stream_insert(socket, :blocked_notices, %{id: id, text: text}, at: 0)
   end
 
   defp switch_channel(socket, channel) do
@@ -190,6 +203,21 @@ defmodule AtriumWeb.ChatLive do
           you are <span class="font-semibold text-base-content">{@nick}</span>
         </span>
       </:header>
+
+      <div
+        id="blocked-notices"
+        phx-update="stream"
+        class="pointer-events-none fixed inset-x-0 top-3 z-50 flex flex-col items-center gap-2 px-4"
+      >
+        <div
+          :for={{dom_id, notice} <- @streams.blocked_notices}
+          id={dom_id}
+          phx-remove={hide("##{dom_id}")}
+          class="pointer-events-auto rounded-md border border-error/30 bg-error px-3 py-1.5 font-mono text-xs font-medium text-error-content shadow-lg"
+        >
+          {notice.text}
+        </div>
+      </div>
 
       <div class="flex h-full min-h-0">
         <aside class="flex w-44 shrink-0 flex-col border-r border-base-300 bg-base-200/50">
