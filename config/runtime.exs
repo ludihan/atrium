@@ -23,6 +23,12 @@ end
 config :atrium, AtriumWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# Optional chat moderation via the TypeSafe Jev API. Moderation only runs when
+# both are set; otherwise every message is allowed through untouched.
+config :atrium, :moderation,
+  jev_api_key: System.get_env("JEV_API_KEY"),
+  rules: System.get_env("CHAT_RULES")
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :atrium, AtriumWeb.Endpoint,
