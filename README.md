@@ -68,3 +68,19 @@ Set `DATABASE_PATH` (where the SQLite file should live) and `SECRET_KEY_BASE`,
 then follow the standard [Phoenix deployment
 guides](https://hexdocs.pm/phoenix/deployment.html). Point `DATABASE_PATH` at a
 persistent volume so history survives restarts.
+
+## Moderation (optional)
+
+Set both `JEV_API_KEY` and `CHAT_RULES` to moderate every message with
+[TypeSafe's Jev API](https://docs.typesafe.ai) before it's stored. `CHAT_RULES`
+is a plain-text description of what's not allowed, e.g.:
+
+```sh
+JEV_API_KEY=sk-...
+CHAT_RULES="No spam or advertising. No harassment or hate speech."
+```
+
+Messages judged to break the rules are rejected with a flash error instead of
+being posted. Leave either variable unset to disable moderation entirely; a
+failed or unreachable moderation call also fails open so the chat keeps
+working. See `Atrium.Chat.Moderation`.
