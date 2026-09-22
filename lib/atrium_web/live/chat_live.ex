@@ -6,8 +6,10 @@ defmodule AtriumWeb.ChatLive do
   use AtriumWeb, :live_view
 
   alias Atrium.Chat
+  alias AtriumWeb.Presence
 
   @blocked_notice_ttl :timer.seconds(4)
+  @presence_topic "chat:presence"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -17,15 +19,19 @@ defmodule AtriumWeb.ChatLive do
     if connected?(socket) do
       Chat.subscribe_directory()
       if current, do: Chat.subscribe(current)
+      Phoenix.PubSub.subscribe(Atrium.PubSub, @presence_topic)
     end
 
     socket =
       socket
       |> assign(:page_title, "atrium")
       |> assign(:nick, nil)
+      |> assign(:presence_key, nil)
       |> assign(:channels, channels)
       |> assign(:current, current)
+      |> assign(:online_counts, online_counts())
       |> assign(:replying_to, nil)
+      |> assign(:mobile_panel, nil)
       |> assign(:nick_form, to_form(%{"nick" => ""}, as: :join))
       |> assign(:msg_form, to_form(%{"body" => ""}, as: :chat))
       |> stream(:messages, (current && Chat.list_recent_messages(current)) || [], limit: -100)
@@ -41,7 +47,7 @@ defmodule AtriumWeb.ChatLive do
         {:noreply, put_flash(socket, :error, "Pick a nick with letters or numbers.")}
 
       nick ->
-        {:noreply, assign(socket, :nick, nick)}
+        {:noreply, socket |> assign(:nick, nick) |> track_presence()}
     end
   end
 
@@ -67,6 +73,16 @@ defmodule AtriumWeb.ChatLive do
     {:noreply, assign(socket, :replying_to, nil)}
   end
 
+  def handle_event("toggle_mobile_panel", %{"panel" => panel}, socket) do
+    panel = String.to_existing_atom(panel)
+    new_panel = if socket.assigns.mobile_panel == panel, do: nil, else: panel
+    {:noreply, assign(socket, :mobile_panel, new_panel)}
+  end
+
+  def handle_event("close_mobile_panel", _params, socket) do
+    {:noreply, assign(socket, :mobile_panel, nil)}
+  end
+
   @impl true
   def handle_info({:new_message, message}, socket) do
     if socket.assigns.current && message.channel_id == socket.assigns.current.id do
@@ -82,6 +98,10 @@ defmodule AtriumWeb.ChatLive do
 
   def handle_info({:dismiss_blocked_notice, id}, socket) do
     {:noreply, stream_delete(socket, :blocked_notices, %{id: id})}
+  end
+
+  def handle_info(%{event: "presence_diff"}, socket) do
+    {:noreply, assign(socket, :online_counts, online_counts())}
   end
 
   ## Input handling
@@ -120,8 +140,14 @@ defmodule AtriumWeb.ChatLive do
 
   defp run_command(socket, cmd, arg) when cmd in ~w(nick n) do
     case sanitize_nick(arg) do
-      "" -> put_flash(socket, :error, "Usage: /nick <name>")
-      nick -> clear_input(assign(socket, :nick, nick))
+      "" ->
+        put_flash(socket, :error, "Usage: /nick <name>")
+
+      nick ->
+        socket
+        |> assign(:nick, nick)
+        |> track_presence()
+        |> clear_input()
     end
   end
 
@@ -171,12 +197,18 @@ defmodule AtriumWeb.ChatLive do
   end
 
   defp switch_channel(socket, channel) do
+    socket = assign(socket, :mobile_panel, nil)
+
     if socket.assigns.current && socket.assigns.current.id == channel.id do
       clear_input(socket)
     else
       if connected?(socket) do
         if socket.assigns.current, do: Chat.unsubscribe(socket.assigns.current)
         Chat.subscribe(channel)
+
+        if key = socket.assigns.presence_key do
+          Presence.update(self(), @presence_topic, key, %{channel_id: channel.id})
+        end
       end
 
       socket
@@ -185,6 +217,29 @@ defmodule AtriumWeb.ChatLive do
       |> clear_input()
       |> stream(:messages, Chat.list_recent_messages(channel), reset: true)
     end
+  end
+
+  defp track_presence(%{assigns: %{current: nil}} = socket), do: socket
+
+  defp track_presence(socket) do
+    %{nick: nick, current: channel, presence_key: presence_key} = socket.assigns
+
+    if connected?(socket) and presence_key != nick do
+      if presence_key, do: Presence.untrack(self(), @presence_topic, presence_key)
+      Presence.track(self(), @presence_topic, nick, %{channel_id: channel.id})
+    end
+
+    assign(socket, :presence_key, nick)
+  end
+
+  defp online_counts do
+    @presence_topic
+    |> Presence.list()
+    |> Enum.reduce(%{}, fn {_key, %{metas: metas}}, acc ->
+      Enum.reduce(metas, acc, fn %{channel_id: channel_id}, acc2 ->
+        Map.update(acc2, channel_id, 1, &(&1 + 1))
+      end)
+    end)
   end
 
   defp clear_input(socket) do
@@ -216,9 +271,27 @@ defmodule AtriumWeb.ChatLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <:header>
+        <button
+          type="button"
+          phx-click="toggle_mobile_panel"
+          phx-value-panel="channels"
+          class="rounded p-1 text-base-content/60 hover:text-base-content md:hidden"
+          aria-label="Toggle channels"
+        >
+          <.icon name="hero-bars-3" class="size-5" />
+        </button>
         <span :if={@nick} class="font-mono text-xs text-base-content/70">
           you are <span class="font-semibold text-base-content">{@nick}</span>
         </span>
+        <button
+          type="button"
+          phx-click="toggle_mobile_panel"
+          phx-value-panel="online"
+          class="rounded p-1 text-base-content/60 hover:text-base-content md:hidden"
+          aria-label="Toggle online users"
+        >
+          <.icon name="hero-users" class="size-5" />
+        </button>
       </:header>
 
       <div
@@ -236,11 +309,30 @@ defmodule AtriumWeb.ChatLive do
         </div>
       </div>
 
-      <div class="flex h-full min-h-0">
-        <aside class="flex w-44 shrink-0 flex-col border-r border-base-300 bg-base-200/50">
-          <p class="px-3 py-2 text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
-            Channels
-          </p>
+      <div class="relative flex h-full min-h-0">
+        <div
+          :if={@mobile_panel}
+          class="fixed inset-0 z-30 bg-black/30 md:hidden"
+          phx-click="close_mobile_panel"
+        />
+
+        <aside class={[
+          "w-64 shrink-0 flex-col overflow-y-auto border-r border-base-300 bg-base-100 md:static md:z-auto md:flex md:w-44 md:bg-base-200/50",
+          if(@mobile_panel == :channels, do: "fixed inset-y-0 left-0 z-40 flex", else: "hidden")
+        ]}>
+          <div class="flex items-center justify-between px-3 py-2">
+            <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
+              Channels
+            </p>
+            <button
+              type="button"
+              phx-click="close_mobile_panel"
+              class="text-base-content/40 hover:text-base-content md:hidden"
+              aria-label="Close"
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </div>
           <nav class="flex-1 overflow-y-auto pb-2">
             <button
               :for={channel <- @channels}
@@ -317,7 +409,7 @@ defmodule AtriumWeb.ChatLive do
                 type="button"
                 phx-click="reply"
                 phx-value-id={message.id}
-                class="ml-1 rounded px-1 align-middle text-[0.7rem] text-base-content/30 opacity-0 transition-opacity hover:text-primary group-hover/msg:opacity-100"
+                class="ml-1 rounded px-1 align-middle text-[0.7rem] text-base-content/30 opacity-60 transition-opacity hover:text-primary hover:opacity-100 md:opacity-0 md:group-hover/msg:opacity-100"
               >
                 reply
               </button>
@@ -416,12 +508,12 @@ defmodule AtriumWeb.ChatLive do
 
           <div
             :if={is_nil(@nick)}
-            class="absolute inset-0 flex items-center justify-center bg-base-100/80 backdrop-blur-sm"
+            class="absolute inset-0 flex items-center justify-center bg-base-100/80 px-4 backdrop-blur-sm"
           >
             <.form
               for={@nick_form}
               phx-submit="set_nick"
-              class="w-72 space-y-3 rounded-lg border border-base-300 bg-base-100 p-5 shadow-lg"
+              class="w-full max-w-72 space-y-3 rounded-lg border border-base-300 bg-base-100 p-5 shadow-lg"
             >
               <h2 class="font-mono text-sm font-semibold">Pick a nick</h2>
               <input
@@ -442,6 +534,42 @@ defmodule AtriumWeb.ChatLive do
             </.form>
           </div>
         </section>
+
+        <aside class={[
+          "w-56 shrink-0 flex-col overflow-y-auto border-l border-base-300 bg-base-100 md:static md:z-auto md:flex md:w-48 md:bg-base-200/50",
+          if(@mobile_panel == :online, do: "fixed inset-y-0 right-0 z-40 flex", else: "hidden")
+        ]}>
+          <div class="flex items-center justify-between px-3 py-2">
+            <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-base-content/40">
+              Online
+            </p>
+            <button
+              type="button"
+              phx-click="close_mobile_panel"
+              class="text-base-content/40 hover:text-base-content md:hidden"
+              aria-label="Close"
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </div>
+          <ul class="flex-1 overflow-y-auto px-3 pb-2 font-mono text-sm">
+            <li :for={channel <- @channels} class="flex items-center justify-between gap-2 py-1">
+              <span class={[
+                "truncate",
+                @current && @current.id == channel.id && "font-semibold text-primary",
+                !(@current && @current.id == channel.id) && "text-base-content/70"
+              ]}>
+                #{channel.name}
+              </span>
+              <span
+                id={"online-count-#{channel.id}"}
+                class="shrink-0 rounded-full bg-base-300 px-1.5 py-0.5 text-[0.65rem] tabular-nums text-base-content/60"
+              >
+                {Map.get(@online_counts, channel.id, 0)}
+              </span>
+            </li>
+          </ul>
+        </aside>
       </div>
     </Layouts.app>
     """

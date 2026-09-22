@@ -12,6 +12,7 @@ defmodule Atrium.Application do
       Atrium.Repo,
       {DNSCluster, query: Application.get_env(:atrium, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Atrium.PubSub},
+      AtriumWeb.Presence,
       # Start a worker by calling: Atrium.Worker.start_link(arg)
       # {Atrium.Worker, arg},
       # Start to serve requests, typically the last entry

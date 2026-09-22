@@ -111,6 +111,23 @@ defmodule AtriumWeb.ChatLiveTest do
            )
   end
 
+  test "shows how many people are online per channel", %{conn: conn, general: general} do
+    {:ok, one, _} = live(conn, ~p"/")
+    {:ok, two, _} = live(build_conn(), ~p"/")
+
+    assert element(one, "#online-count-#{general.id}") |> render() =~ "0"
+
+    one |> form("form[phx-submit=set_nick]", join: %{nick: "neo"}) |> render_submit()
+    _ = :sys.get_state(one.pid)
+
+    assert element(one, "#online-count-#{general.id}") |> render() =~ "1"
+
+    two |> form("form[phx-submit=set_nick]", join: %{nick: "trinity"}) |> render_submit()
+    _ = :sys.get_state(one.pid)
+
+    assert element(one, "#online-count-#{general.id}") |> render() =~ "2"
+  end
+
   test "sending a message tells the browser to clear the composer", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
 
