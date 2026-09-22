@@ -7,7 +7,7 @@ defmodule Atrium.Chat do
   import Ecto.Query, warn: false
 
   alias Atrium.Repo
-  alias Atrium.Chat.{Channel, Message}
+  alias Atrium.Chat.{Channel, Message, Moderation}
 
   @pubsub Atrium.PubSub
   @recent_limit 100
@@ -70,18 +70,28 @@ defmodule Atrium.Chat do
   @doc """
   Records a line in `channel` and broadcasts it to everyone watching that
   channel. `kind` is `"said"` or `"emote"` (`/me`).
+
+  When moderation is configured (see `Atrium.Chat.Moderation`), the message is
+  checked against the configured rules first; a message that breaks them is
+  rejected with `{:error, :moderated}` instead of being stored.
   """
   def post_message(%Channel{} = channel, nick, body, kind \\ "said") do
-    %Message{}
-    |> Message.changeset(%{body: body, nick: nick, kind: kind, channel_id: channel.id})
-    |> Repo.insert()
-    |> case do
-      {:ok, message} ->
-        Phoenix.PubSub.broadcast(@pubsub, topic(channel), {:new_message, message})
-        {:ok, message}
+    case Moderation.check(body) do
+      :block ->
+        {:error, :moderated}
 
-      {:error, changeset} ->
-        {:error, changeset}
+      :allow ->
+        %Message{}
+        |> Message.changeset(%{body: body, nick: nick, kind: kind, channel_id: channel.id})
+        |> Repo.insert()
+        |> case do
+          {:ok, message} ->
+            Phoenix.PubSub.broadcast(@pubsub, topic(channel), {:new_message, message})
+            {:ok, message}
+
+          {:error, changeset} ->
+            {:error, changeset}
+        end
     end
   end
 
