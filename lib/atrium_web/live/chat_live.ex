@@ -185,8 +185,19 @@ defmodule AtriumWeb.ChatLive do
         |> assign(:replying_to, nil)
         |> clear_input()
 
-      {:error, :moderated} ->
-        show_blocked_notice(socket, "Message blocked: breaks the channel rules.")
+      {:ok, _message, {:warn, meta}} ->
+        socket
+        |> assign(:replying_to, nil)
+        |> clear_input()
+        |> show_blocked_notice(
+          "Sent, but this message might break the channel rules (#{meta.category}, #{meta.severity})."
+        )
+
+      {:error, {:moderated, meta}} ->
+        show_blocked_notice(
+          socket,
+          "Message blocked: breaks the channel rules (#{meta.category}, #{meta.severity})."
+        )
 
       {:error, _changeset} ->
         put_flash(socket, :error, "Message was not sent.")

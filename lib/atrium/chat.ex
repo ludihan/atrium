@@ -79,15 +79,17 @@ defmodule Atrium.Chat do
   attached when it belongs to the same `channel` (silently dropped otherwise).
 
   When moderation is configured (see `Atrium.Chat.Moderation`), the message is
-  checked against the configured rules first; a message that breaks them is
-  rejected with `{:error, :moderated}` instead of being stored.
+  checked against the configured rules first. A severe violation is rejected
+  with `{:error, {:moderated, meta}}` instead of being stored; a milder one is
+  still stored and returned as `{:ok, message, {:warn, meta}}` so the caller
+  can flag it to the author. `meta` is `%{category: string, severity: string}`.
   """
   def post_message(%Channel{} = channel, nick, body, kind \\ "said", reply_to \\ nil) do
     case Moderation.check(body) do
-      :block ->
-        {:error, :moderated}
+      {:block, meta} ->
+        {:error, {:moderated, meta}}
 
-      :allow ->
+      warn_or_allow ->
         attrs = %{
           body: body,
           nick: nick,
@@ -103,7 +105,11 @@ defmodule Atrium.Chat do
           {:ok, message} ->
             message = Repo.preload(message, :reply_to)
             Phoenix.PubSub.broadcast(@pubsub, topic(channel), {:new_message, message})
-            {:ok, message}
+
+            case warn_or_allow do
+              {:warn, meta} -> {:ok, message, {:warn, meta}}
+              :allow -> {:ok, message}
+            end
 
           {:error, changeset} ->
             {:error, changeset}

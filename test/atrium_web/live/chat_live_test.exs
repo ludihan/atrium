@@ -176,7 +176,16 @@ defmodule AtriumWeb.ChatLiveTest do
     on_exit(fn -> Application.delete_env(:atrium, :moderation) end)
 
     Req.Test.stub(AtriumWeb.ModerationStub, fn conn ->
-      Req.Test.json(conn, %{"answers" => %{"breaks_rules" => %{"noul" => 1.0}}})
+      Req.Test.json(conn, %{
+        "answers" => %{
+          "breaks_rules" => %{"noul" => 1.0},
+          "category" => %{"choice" => "spam"},
+          "severity" => %{
+            "score" => 2.0,
+            "legend" => %{"0" => "mild", "1" => "moderate", "2" => "severe"}
+          }
+        }
+      })
     end)
 
     {:ok, view, _} = live(conn, ~p"/")
@@ -192,6 +201,43 @@ defmodule AtriumWeb.ChatLiveTest do
     html = render(view)
     assert Regex.scan(~r/Message blocked/, html) |> length() == 4
     assert html =~ "+2 more waiting"
+  end
+
+  test "a mild rule violation is posted anyway with a warning notice", %{conn: conn} do
+    Application.put_env(:atrium, :moderation,
+      jev_api_key: "test-key",
+      rules: "stay on topic",
+      plug: {Req.Test, AtriumWeb.ModerationStub}
+    )
+
+    on_exit(fn -> Application.delete_env(:atrium, :moderation) end)
+
+    Req.Test.stub(AtriumWeb.ModerationStub, fn conn ->
+      Req.Test.json(conn, %{
+        "answers" => %{
+          "breaks_rules" => %{"noul" => 0.9},
+          "category" => %{"choice" => "off_topic"},
+          "severity" => %{
+            "score" => 0.2,
+            "legend" => %{"0" => "mild", "1" => "moderate", "2" => "severe"}
+          }
+        }
+      })
+    end)
+
+    {:ok, view, _} = live(conn, ~p"/")
+
+    view
+    |> form("form[phx-submit=set_nick]", join: %{nick: "smith"})
+    |> render_submit()
+
+    view
+    |> form("form[phx-submit=send]", chat: %{body: "totally off topic"})
+    |> render_submit()
+
+    html = render(view)
+    assert html =~ "totally off topic"
+    assert html =~ "Sent, but this message might break the channel rules (off_topic, mild)."
   end
 
   test "sending a message tells the browser to clear the composer", %{conn: conn} do
