@@ -48,7 +48,10 @@ defmodule Atrium.Chat.Moderation do
       }
     }
 
-    case Req.post(@endpoint, json: payload, auth: {:bearer, api_key}, receive_timeout: 5_000) do
+    opts =
+      [json: payload, auth: {:bearer, api_key}, receive_timeout: 5_000] ++ req_test_opts()
+
+    case Req.post(@endpoint, opts) do
       {:ok,
        %Req.Response{
          status: 200,
@@ -66,6 +69,15 @@ defmodule Atrium.Chat.Moderation do
       {:error, reason} ->
         Logger.warning("Atrium.Chat.Moderation: request failed: #{inspect(reason)}")
         :allow
+    end
+  end
+
+  # Lets tests swap in a `Req.Test` stub via `config :atrium, :moderation, plug: ...`
+  # instead of hitting the real TypeSafe API.
+  defp req_test_opts do
+    case Application.get_env(:atrium, :moderation, [])[:plug] do
+      nil -> []
+      plug -> [plug: plug]
     end
   end
 end

@@ -128,6 +128,34 @@ defmodule AtriumWeb.ChatLiveTest do
     assert element(one, "#online-count-#{general.id}") |> render() =~ "2"
   end
 
+  test "blocked-message notices queue newest-first and cap how many render", %{conn: conn} do
+    Application.put_env(:atrium, :moderation,
+      jev_api_key: "test-key",
+      rules: "no spam",
+      plug: {Req.Test, AtriumWeb.ModerationStub}
+    )
+
+    on_exit(fn -> Application.delete_env(:atrium, :moderation) end)
+
+    Req.Test.stub(AtriumWeb.ModerationStub, fn conn ->
+      Req.Test.json(conn, %{"answers" => %{"breaks_rules" => %{"noul" => 1.0}}})
+    end)
+
+    {:ok, view, _} = live(conn, ~p"/")
+
+    view
+    |> form("form[phx-submit=set_nick]", join: %{nick: "smith"})
+    |> render_submit()
+
+    for n <- 1..6 do
+      view |> form("form[phx-submit=send]", chat: %{body: "spam #{n}"}) |> render_submit()
+    end
+
+    html = render(view)
+    assert Regex.scan(~r/Message blocked/, html) |> length() == 4
+    assert html =~ "+2 more waiting"
+  end
+
   test "sending a message tells the browser to clear the composer", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
 

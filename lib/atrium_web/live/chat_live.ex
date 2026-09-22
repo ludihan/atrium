@@ -9,6 +9,7 @@ defmodule AtriumWeb.ChatLive do
   alias AtriumWeb.Presence
 
   @blocked_notice_ttl :timer.seconds(4)
+  @max_visible_notices 4
   @presence_topic "chat:presence"
 
   @impl true
@@ -32,10 +33,10 @@ defmodule AtriumWeb.ChatLive do
       |> assign(:online_counts, online_counts())
       |> assign(:replying_to, nil)
       |> assign(:mobile_panel, nil)
+      |> assign(:blocked_notices, [])
       |> assign(:nick_form, to_form(%{"nick" => ""}, as: :join))
       |> assign(:msg_form, to_form(%{"body" => ""}, as: :chat))
       |> stream(:messages, (current && Chat.list_recent_messages(current)) || [], limit: -100)
-      |> stream(:blocked_notices, [])
 
     {:ok, socket}
   end
@@ -97,7 +98,8 @@ defmodule AtriumWeb.ChatLive do
   end
 
   def handle_info({:dismiss_blocked_notice, id}, socket) do
-    {:noreply, stream_delete(socket, :blocked_notices, %{id: id})}
+    {:noreply,
+     update(socket, :blocked_notices, &Enum.reject(&1, fn notice -> notice.id == id end))}
   end
 
   def handle_info(%{event: "presence_diff"}, socket) do
@@ -193,8 +195,12 @@ defmodule AtriumWeb.ChatLive do
   defp show_blocked_notice(socket, text) do
     id = "blocked-#{System.unique_integer([:positive, :monotonic])}"
     Process.send_after(self(), {:dismiss_blocked_notice, id}, @blocked_notice_ttl)
-    stream_insert(socket, :blocked_notices, %{id: id, text: text}, at: 0)
+    update(socket, :blocked_notices, &[%{id: id, text: text} | &1])
   end
+
+  defp visible_notices(notices), do: Enum.take(notices, @max_visible_notices)
+
+  defp hidden_notice_count(notices), do: max(length(notices) - @max_visible_notices, 0)
 
   defp switch_channel(socket, channel) do
     socket = assign(socket, :mobile_panel, nil)
@@ -296,17 +302,22 @@ defmodule AtriumWeb.ChatLive do
 
       <div
         id="blocked-notices"
-        phx-update="stream"
         class="pointer-events-none fixed inset-x-0 top-3 z-50 flex flex-col items-center gap-2 px-4"
       >
         <div
-          :for={{dom_id, notice} <- @streams.blocked_notices}
-          id={dom_id}
-          phx-remove={hide("##{dom_id}")}
+          :for={notice <- visible_notices(@blocked_notices)}
+          id={notice.id}
+          phx-remove={hide("##{notice.id}")}
           class="pointer-events-auto rounded-md border border-error/30 bg-error px-3 py-1.5 font-mono text-xs font-medium text-error-content shadow-lg"
         >
           {notice.text}
         </div>
+        <p
+          :if={hidden_notice_count(@blocked_notices) > 0}
+          class="pointer-events-none font-mono text-[0.65rem] text-base-content/50"
+        >
+          +{hidden_notice_count(@blocked_notices)} more waiting…
+        </p>
       </div>
 
       <div class="relative flex h-full min-h-0">
