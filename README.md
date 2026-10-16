@@ -80,7 +80,10 @@ JEV_API_KEY=sk-...
 CHAT_RULES="No spam or advertising. No harassment or hate speech."
 ```
 
-Messages judged to break the rules are rejected with a flash error instead of
-being posted. Leave either variable unset to disable moderation entirely; a
-failed or unreachable moderation call also fails open so the chat keeps
-working. See `Atrium.Chat.Moderation`.
+Each message is judged for whether it breaks the rules, and if so, its
+category (spam, harassment, off-topic, other) and severity. Severe violations
+are blocked and the author sees a toast instead of the message being posted;
+milder ones are still posted, with a toast warning the author that the message
+might break the rules. Leave either variable unset to disable moderation
+entirely; a failed or unreachable moderation call also fails open so the chat
+keeps working. See `Atrium.Chat.Moderation`.
